@@ -1,117 +1,160 @@
 // deno-lint-ignore-file
 import { Application, Router, Context } from "oak";
 import { oakCors } from "cors";
-import { SignJWT, jwtVerify } from "jose"; 
-
-interface UserAccount {
-  password: string;
-  createdAt: string;
-}
-
-interface StoreData {
-  username: string;
-  bio: string;
-  links: Array<{ platformName: string; url: string; source: string }>;
-  updatedAt: string;
-}
+import { SignJWT, jwtVerify } from "jose";
 
 const app = new Application();
 const router = new Router();
-const kv = await Deno.openKv();
 
-// Use a static secret for development so the server remembers keys after restart
-const SECRET = new TextEncoder().encode("linkstore_ultra_secret_key_12345");
+const remoteUrl = Deno.env.get("HUB_DATABASE_URL");
+let kv: Deno.Kv | null = null;
 
-app.use(oakCors({ origin: "http://localhost:5173" }));
+try {
+  kv = await Deno.openKv(remoteUrl);
+  console.log("✅ Deno KV Connected");
+} catch (err) {
+  const error = err as Error;
+  console.error("❌ KV CONNECTION ERROR:", error.message);
+}
 
-// --- HELPER: Auth Middleware ---
+const SECRET_STR = Deno.env.get("JWT_SECRET") || "fallback_secret_for_local_only";
+const SECRET = new TextEncoder().encode(SECRET_STR);
+
+app.use(oakCors({ 
+  origin: ["http://localhost:5173", "https://linkstore.bolujolayemi-a11y.deno.net"],
+  credentials: true,
+  methods: "GET,POST,OPTIONS",
+  allowedHeaders: "Content-Type, Authorization",
+  optionsSuccessStatus: 200, 
+}));
+
 const authMiddleware = async (ctx: Context, next: () => Promise<unknown>) => {
   const authHeader = ctx.request.headers.get("Authorization");
-  if (!authHeader) {
+  if (!authHeader?.startsWith("Bearer ")) {
     ctx.response.status = 401;
+    ctx.response.body = { error: "Authorization required" };
     return;
   }
   try {
     const token = authHeader.split(" ")[1];
     const { payload } = await jwtVerify(token, SECRET);
-    ctx.state.user = payload.user; // Inject the user email into the context
+    ctx.state.user = payload.user; 
     await next();
-  } catch (_e) {
+  } catch {
     ctx.response.status = 401;
+    ctx.response.body = { error: "Invalid Session" };
   }
 };
 
 // --- AUTH ROUTES ---
-
 router.post("/api/register", async (ctx) => {
-  const { email, password } = await ctx.request.body.json();
-  const newUser: UserAccount = { password, createdAt: new Date().toISOString() };
-  await kv.set(["users", email], newUser);
-  ctx.response.body = { success: true };
+  try {
+    const body = await ctx.request.body.json();
+    const { email, password } = body;
+    if (!kv) throw new Error("Database not connected");
+    await kv.set(["users", email], { password, createdAt: new Date().toISOString() });
+    ctx.response.body = { success: true };
+  } catch (err) {
+    const error = err as Error;
+    ctx.response.status = 500;
+    ctx.response.body = { error: error.message };
+  }
 });
 
 router.post("/api/login", async (ctx) => {
-  const { email, password } = await ctx.request.body.json();
-  const user = await kv.get<UserAccount>(["users", email]);
+  try {
+    const { email, password } = await ctx.request.body.json();
+    if (!kv) throw new Error("Database not connected");
+    const user = await kv.get<{password: string}>(["users", email]);
 
-  if (user.value && user.value.password === password) {
-    const jwt = await new SignJWT({ user: email })
-      .setProtectedHeader({ alg: "HS256" })
-      .setIssuedAt()
-      .setExpirationTime("24h")
-      .sign(SECRET);
-    ctx.response.body = { success: true, token: jwt };
-  } else {
-    ctx.response.status = 401;
+    if (user.value && user.value.password === password) {
+      const jwt = await new SignJWT({ user: email })
+        .setProtectedHeader({ alg: "HS256" })
+        .setIssuedAt()
+        .setExpirationTime("24h")
+        .sign(SECRET);
+      ctx.response.body = { success: true, token: jwt };
+    } else {
+      ctx.response.status = 401;
+      ctx.response.body = { error: "Invalid credentials" };
+    }
+  } catch (err) {
+    const error = err as Error;
+    ctx.response.status = 400;
+    ctx.response.body = { error: error.message };
   }
 });
 
-// --- STORE ROUTES ---
-
-// 1. SAVE: Links the store to the logged-in user's email
+// --- HUB DATA ROUTES ---
 router.post("/api/save-store", authMiddleware, async (ctx) => {
-  const userEmail = ctx.state.user; 
-  const body = await ctx.request.body.json();
+  try {
+    const userEmail = ctx.state.user; 
+    const body = await ctx.request.body.json();
+    if (!kv) throw new Error("DB Offline");
 
-  const newStore: StoreData = {
-    ...body,
-    updatedAt: new Date().toISOString()
-  };
+    const sub = await kv.get<{plan: string, status: string}>(["subscriptions", userEmail]);
+    const isPro = sub.value?.plan === 'Pro' && sub.value?.status === 'Active';
 
-  // We save it under the user's email so we can find it easily later
-  await kv.set(["user_stores", userEmail], newStore);
-  
-  // Also save it by username if you want a public link like /api/store/bolu
-  await kv.set(["stores", body.username], newStore);
-
-  ctx.response.body = { success: true, message: "Store synced!" };
-});
-
-// 2. GET: Fetches the store for the Dashboard
-router.get("/api/get-store", authMiddleware, async (ctx) => {
-  const userEmail = ctx.state.user;
-  const store = await kv.get<StoreData>(["user_stores", userEmail]);
-
-  if (!store.value) {
-    ctx.response.body = { success: false, error: "No store found" };
-  } else {
-    ctx.response.body = { success: true, store: store.value };
+    if (!isPro && body.links.length > 3) {
+      ctx.response.status = 403;
+      ctx.response.body = { success: false, error: "Limit reached. Upgrade to Pro." };
+      return;
+    }
+    
+    const storeData = { ...body, isPro, updatedAt: new Date().toISOString() };
+    await kv.set(["user_stores", userEmail], storeData);
+    await kv.set(["stores", body.username], storeData);
+    
+    ctx.response.body = { success: true };
+  } catch (err) {
+    const error = err as Error;
+    ctx.response.status = 500;
+    ctx.response.body = { error: error.message };
   }
 });
 
-// 3. MOCK ORDERS: Added this so the Dashboard isn't empty
-router.get("/api/orders", authMiddleware, async (ctx) => {
-  ctx.response.body = {
-    success: true,
-    orders: [
-      { id: '1', customerName: 'Tunde Dev', productName: 'Premium Lace', amount: '₦25,000', source: 'TikTok', status: 'Paid', timestamp: '5m ago' },
-      { id: '2', customerName: 'Amaka W.', productName: 'Voile Fabric', amount: '₦12,000', source: 'Instagram', status: 'Pending', timestamp: '1h ago' }
-    ]
-  };
+router.get("/api/get-store", authMiddleware, async (ctx) => {
+  try {
+    const userEmail = ctx.state.user;
+    if (!kv) throw new Error("DB Offline");
+    
+    // Safely get store and subscription
+    const [storeRes, subRes] = await Promise.all([
+      kv.get<Record<string, unknown>>(["user_stores", userEmail]),
+      kv.get<{plan: string}>(["subscriptions", userEmail])
+    ]);
+    
+    // If store doesn't exist yet, return a clean empty state instead of crashing
+    const storeData = storeRes.value || { username: "", bio: "", links: [] };
+    const isPro = subRes.value?.plan === 'Pro';
+
+    ctx.response.body = { 
+      success: true, 
+      store: { ...storeData, isPro } 
+    };
+  } catch (err) {
+    const error = err as Error;
+    ctx.response.status = 500;
+    ctx.response.body = { error: error.message };
+  }
+});
+
+router.post("/api/update-subscription", authMiddleware, async (ctx) => {
+  try {
+    const userEmail = ctx.state.user;
+    const { plan, status } = await ctx.request.body.json();
+    if (!kv) throw new Error("DB Offline");
+    await kv.set(["subscriptions", userEmail], { plan, status, updatedAt: new Date().toISOString() });
+    ctx.response.body = { success: true };
+  } catch (err) {
+    const error = err as Error;
+    ctx.response.status = 500;
+    ctx.response.body = { error: error.message };
+  }
 });
 
 app.use(router.routes());
 app.use(router.allowedMethods());
 
-console.log("🟢 Deno Hub Active: http://localhost:8000");
+console.log(`🟢 LinkStore Hub Online`);
 await app.listen({ port: 8000 });

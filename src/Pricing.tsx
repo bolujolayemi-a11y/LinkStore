@@ -7,18 +7,18 @@ const plans = [
     name: "Free",
     monthly: 0,
     yearly: 0,
-    features: ["Up to 5 Links", "Basic Analytics", "Standard Theme", "TikTok/IG Integration"],
+    features: ["Up to 3 Links", "Basic Analytics", "Standard Theme", "TikTok/IG Integration"],
     cta: "Get Started",
-    path: "/dashboard", // Internal route
+    path: "/dashboard", 
     popular: false
   },
   {
     name: "Pro",
-    monthly: 2500,
-    yearly: 20000,
+    monthly: 3000,
+    yearly: 30000,
     features: ["Unlimited Links", "Advanced Order Hub", "Custom Branding", "Priority Support"],
     cta: "Go Pro",
-    path: "/checkout", // You can create a checkout page next
+    path: "/checkout", 
     popular: true
   },
   {
@@ -27,7 +27,7 @@ const plans = [
     yearly: 75000,
     features: ["Multiple Sub-accounts", "API Access", "Custom Domain", "Dedicated Manager"],
     cta: "Contact Sales",
-    path: "mailto:sales@linkstore.com", // External / Mail action
+    path: "mailto:sales@linkstore.com", 
     popular: false
   }
 ];
@@ -37,22 +37,34 @@ export default function Pricing() {
   const navigate = useNavigate();
 
   const handlePlanSelection = (path: string) => {
+    // 1. Check for the Merchant Token
+    const token = localStorage.getItem('token');
+
+    // 2. Handle External Links (Sales/Email)
     if (path.startsWith('mailto:') || path.startsWith('http')) {
       window.location.href = path;
-    } else {
-      navigate(path);
+      return;
     }
+
+    // 3. AUTH GUARD: Redirect to login if no token exists
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+
+    // 4. LOGGED IN: Proceed to Dashboard or Checkout
+    navigate(path);
   };
 
   return (
     <div className="min-h-screen bg-[#fafafa] flex flex-col items-center py-20 px-6 antialiased font-sans">
       
-      {/* 🔙 Back to Creator Button */}
+      {/* 🔙 BACK NAVIGATION */}
       <motion.button
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         whileHover={{ x: -4 }}
-        onClick={() => navigate('/create')}
+        onClick={() => navigate(-1)}
         className="mb-12 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.3em] text-gray-300 hover:text-black transition-all group"
       >
         <svg 
@@ -62,7 +74,7 @@ export default function Pricing() {
         >
           <path d="m15 18-6-6 6-6"/>
         </svg>
-        Edit Store Config
+        Back
       </motion.button>
 
       <div className="max-w-5xl w-full mx-auto">
@@ -76,6 +88,7 @@ export default function Pricing() {
           </motion.h1>
           <p className="text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] mt-4 italic">Step 4: Select Your Growth Plan</p>
 
+          {/* TOGGLE: Monthly / Yearly */}
           <div className="mt-10 flex items-center justify-center gap-4">
             <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${!isYearly ? 'text-black' : 'text-gray-400'}`}>Monthly</span>
             <button 
@@ -94,6 +107,7 @@ export default function Pricing() {
           </div>
         </header>
 
+        {/* PRICING GRID */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {plans.map((plan, i) => (
             <motion.div 

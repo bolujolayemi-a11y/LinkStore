@@ -2,38 +2,79 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 
+/** * 🌐 SMART URL SWITCHING */
+const API_BASE_URL = window.location.hostname === "localhost" 
+  ? "http://localhost:8000" 
+  : "https://linkstore.bolujolayemi-a11y.deno.net"; 
+
 export default function Checkout() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [error, setError] = useState('');
 
-  const handlePayment = (e: React.FormEvent) => {
+  const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError('');
     
-    // Simulate payment processing
-    setTimeout(() => {
+    const token = localStorage.getItem('token');
+
+    if (!token) {
+      setError("Session expired. Please log in again.");
+      setTimeout(() => navigate('/login'), 2000);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/update-subscription`, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          plan: 'Pro',
+          status: 'Active' 
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Payment sync failed.");
+      }
+
+      const data = await response.json();
+
+      if (data.success) {
+        setSuccess(true);
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 2000);
+      } else {
+        setError(data.error || "Payment sync failed.");
+      }
+    } catch (err: any) {
+      console.error("Payment Error:", err);
+      setError(window.location.hostname === "localhost" 
+        ? "Local Server Offline: Run 'deno run -A main.ts' ❌" 
+        : "Cloud Hub unreachable. Check connection. ❌"
+      );
+    } finally {
       setLoading(false);
-      setSuccess(true);
-      
-      // Redirect to dashboard after success
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 2000);
-    }, 2500);
+    }
   };
 
   return (
     <div className="min-h-screen bg-[#fafafa] flex flex-col items-center justify-center p-6 antialiased font-sans">
       
-      {/* 🔙 Back to Pricing */}
       <motion.button
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         onClick={() => navigate('/pricing')}
-        className="mb-8 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-gray-300 hover:text-black transition-all"
+        className="mb-8 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-gray-300 hover:text-black transition-all group"
       >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-hover:-translate-x-1">
           <path d="m15 18-6-6 6-6"/>
         </svg>
         Change Plan
@@ -54,7 +95,8 @@ export default function Checkout() {
               <header className="mb-10">
                 <h2 className="text-sm font-black uppercase tracking-widest text-gray-400">Upgrade to Pro</h2>
                 <div className="mt-2 flex items-baseline gap-1">
-                  <span className="text-4xl font-black italic tracking-tighter text-black">₦2,500</span>
+                  {/* 🚀 Updated price to 3,000 to match Pricing.tsx */}
+                  <span className="text-4xl font-black italic tracking-tighter text-black">₦3,000</span>
                   <span className="text-gray-400 text-xs font-bold uppercase tracking-tighter">/monthly</span>
                 </div>
               </header>
@@ -65,33 +107,31 @@ export default function Checkout() {
                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Cardholder Name</label>
                     <input 
                       required
-                      placeholder="Jolayemi Boluwatife"
+                      placeholder="Full Name"
                       className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-black outline-none transition-all text-sm font-medium"
                     />
                   </div>
 
                   <div className="space-y-1.5 px-1">
                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Card Number</label>
-                    <div className="relative">
-                      <input 
-                        required
-                        placeholder="0000 0000 0000 0000"
-                        className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-black outline-none transition-all text-sm font-mono"
-                      />
-                    </div>
+                    <input required placeholder="0000 0000 0000 0000" className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-black outline-none transition-all text-sm font-mono" />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5 px-1">
                       <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Expiry</label>
-                      <input placeholder="MM/YY" className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-black outline-none transition-all text-sm font-mono" />
+                      <input required placeholder="MM/YY" className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-black outline-none transition-all text-sm font-mono" />
                     </div>
                     <div className="space-y-1.5 px-1">
                       <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">CVC</label>
-                      <input placeholder="•••" className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-black outline-none transition-all text-sm font-mono" />
+                      <input required placeholder="•••" className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-black outline-none transition-all text-sm font-mono" />
                     </div>
                   </div>
                 </div>
+
+                {error && (
+                  <p className="text-[10px] font-black uppercase text-red-500 text-center">{error}</p>
+                )}
 
                 <motion.button 
                   whileHover={{ y: -2 }}
@@ -99,7 +139,7 @@ export default function Checkout() {
                   disabled={loading}
                   className="w-full py-5 bg-black text-white rounded-full font-black uppercase tracking-widest text-[11px] shadow-xl shadow-black/10 transition-all disabled:bg-gray-200 mt-2"
                 >
-                  {loading ? "Verifying..." : "Complete Payment"}
+                  {loading ? "Syncing Hub..." : "Complete Payment"}
                 </motion.button>
               </form>
             </motion.div>
@@ -116,7 +156,7 @@ export default function Checkout() {
                 </svg>
               </div>
               <h2 className="text-2xl font-black italic tracking-tighter uppercase text-black">Payment Successful</h2>
-              <p className="text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] mt-3">Welcome to LinkStore Pro</p>
+              <p className="text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] mt-3 italic">Account Activated</p>
             </motion.div>
           )}
         </AnimatePresence>

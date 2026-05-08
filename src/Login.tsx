@@ -2,9 +2,18 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 
+/** * 🌐 SMART URL SWITCHING
+ * Detects if you are developing locally or running in production.
+ */
+const API_BASE_URL = window.location.hostname === "localhost" 
+  ? "http://localhost:8000" 
+  : "https://linkstore.bolujolayemi-a11y.deno.net"; 
+
 export default function Login() {
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
+  
+  // FIX: Initialize with empty strings to prevent "controlled to uncontrolled" warnings
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -18,28 +27,38 @@ export default function Login() {
     const endpoint = isLogin ? '/api/login' : '/api/register';
     
     try {
-      const res = await fetch(`http://localhost:8000${endpoint}`, {
+      const res = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
+
+      // Handle non-JSON or error responses from Deno
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server Error: ${res.status}`);
+      }
 
       const data = await res.json();
 
       if (data.success) {
         if (isLogin) {
           localStorage.setItem('token', data.token);
-          // 🚀 SUCCESS: Take the merchant to the Hub Creator (App.tsx)
+          // 🚀 SUCCESS: Navigate to the Hub Creator
           navigate('/create');
         } else {
           setMessage("Account created! You can now sign in. ✨");
           setIsLogin(true);
         }
       } else {
-        setMessage(data.error || "Something went wrong.");
+        setMessage(data.error || "Authentication failed.");
       }
-    } catch (_err) {
-      setMessage("Server connection failed. ❌");
+    } catch (err: any) {
+      console.error("Auth Error:", err);
+      // Detailed error for local debugging
+      setMessage(window.location.hostname === "localhost" 
+        ? "Local Hub unreachable. Start Deno on port 8000. ❌" 
+        : "Hub is currently unreachable. ❌");
     } finally {
       setLoading(false);
     }
@@ -48,7 +67,6 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-[#fafafa] flex flex-col items-center justify-center p-6 antialiased font-sans">
       
-      {/* 🔙 BACK BUTTON: Takes user to Landing Page */}
       <motion.button
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -80,7 +98,7 @@ export default function Login() {
             animate={{ opacity: 1 }}
             className="text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] mt-4"
           >
-            {isLogin ? 'Merchant Access' : 'Create Merchant Account'}
+            {isLogin ? 'Merchant Access' : 'Initialize Merchant Hub'}
           </motion.p>
         </header>
 
@@ -92,6 +110,7 @@ export default function Login() {
                 type="email"
                 required
                 placeholder="name@store.com"
+                value={email}
                 className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-black outline-none transition-all text-sm font-medium"
                 onChange={(e) => setEmail(e.target.value)}
               />
@@ -103,6 +122,7 @@ export default function Login() {
                 type="password"
                 required
                 placeholder="••••••••"
+                value={password}
                 className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-black outline-none transition-all text-sm font-medium"
                 onChange={(e) => setPassword(e.target.value)}
               />
@@ -115,7 +135,7 @@ export default function Login() {
             disabled={loading}
             className="w-full py-5 bg-black text-white rounded-full font-black uppercase tracking-widest text-[11px] shadow-xl shadow-black/10 transition-all disabled:bg-gray-200 mt-2"
           >
-            {loading ? "Syncing..." : isLogin ? "Access Hub" : "Initialize Account"}
+            {loading ? "Syncing..." : isLogin ? "Access Hub" : "Create Account"}
           </motion.button>
         </form>
 
