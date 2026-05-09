@@ -21,7 +21,12 @@ const SECRET_STR = Deno.env.get("JWT_SECRET") || "fallback_secret_for_local_only
 const SECRET = new TextEncoder().encode(SECRET_STR);
 
 app.use(oakCors({ 
-  origin: ["http://localhost:5173", "https://linkstore.bolujolayemi-a11y.deno.net", "https://link-store-psi.vercel.app/"],
+  origin: [
+    "http://localhost:5173", 
+    "https://linkstore.bolujolayemi-a11y.deno.net",
+    "https://link-store-psi.vercel.app", // Your main production link
+    /^https:\/\/link-store-.*\.vercel\.app$/ // Matches any Vercel preview branch
+  ],
   credentials: true,
   methods: "GET,POST,OPTIONS",
   allowedHeaders: "Content-Type, Authorization",
