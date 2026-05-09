@@ -12,8 +12,6 @@ const API_BASE_URL = window.location.hostname === "localhost"
 export default function Login() {
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
-  
-  // FIX: Initialize with empty strings to prevent "controlled to uncontrolled" warnings
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -24,16 +22,17 @@ export default function Login() {
     setLoading(true);
     setMessage('');
 
-    const endpoint = isLogin ? '/api/login' : '/api/register';
+    // 🚀 FIXED: Removed leading slashes here to avoid double-slash errors
+    const endpoint = isLogin ? 'api/login' : 'api/register';
     
     try {
+      // 🚀 FIXED: URL is now constructed cleanly with a single slash
       const res = await fetch(`${API_BASE_URL}/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
 
-      // Handle non-JSON or error responses from Deno
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.error || `Server Error: ${res.status}`);
@@ -44,7 +43,6 @@ export default function Login() {
       if (data.success) {
         if (isLogin) {
           localStorage.setItem('token', data.token);
-          // 🚀 SUCCESS: Navigate to the Hub Creator
           navigate('/create');
         } else {
           setMessage("Account created! You can now sign in. ✨");
@@ -55,10 +53,12 @@ export default function Login() {
       }
     } catch (err: any) {
       console.error("Auth Error:", err);
-      // Detailed error for local debugging
-      setMessage(window.location.hostname === "localhost" 
-        ? "Local Hub unreachable. Start Deno on port 8000. ❌" 
-        : "Hub is currently unreachable. ❌");
+      // Detailed error for production vs local
+      if (window.location.hostname === "localhost") {
+        setMessage("Local Hub unreachable. Start Deno on port 8000. ❌");
+      } else {
+        setMessage("Cloud Hub unreachable. Check your connection or CORS. ❌");
+      }
     } finally {
       setLoading(false);
     }
