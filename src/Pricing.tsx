@@ -37,29 +37,24 @@ export default function Pricing() {
   const navigate = useNavigate();
 
   const handlePlanSelection = (path: string) => {
-    // 1. Check for the Merchant Token
     const token = localStorage.getItem('token');
 
-    // 2. Handle External Links (Sales/Email)
     if (path.startsWith('mailto:') || path.startsWith('http')) {
       window.location.href = path;
       return;
     }
 
-    // 3. AUTH GUARD: Redirect to login if no token exists
     if (!token) {
       navigate('/login');
       return;
     }
 
-    // 4. LOGGED IN: Proceed to Dashboard or Checkout
     navigate(path);
   };
 
   return (
     <div className="min-h-screen bg-[#fafafa] flex flex-col items-center py-20 px-6 antialiased font-sans">
       
-      {/* 🔙 BACK NAVIGATION */}
       <motion.button
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -67,13 +62,7 @@ export default function Pricing() {
         onClick={() => navigate(-1)}
         className="mb-12 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.3em] text-gray-300 hover:text-black transition-all group"
       >
-        <svg 
-          width="14" height="14" viewBox="0 0 24 24" fill="none" 
-          stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
-          className="transition-transform group-hover:scale-110"
-        >
-          <path d="m15 18-6-6 6-6"/>
-        </svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
         Back
       </motion.button>
 
@@ -88,22 +77,37 @@ export default function Pricing() {
           </motion.h1>
           <p className="text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] mt-4 italic">Step 4: Select Your Growth Plan</p>
 
-          {/* TOGGLE: Monthly / Yearly */}
-          <div className="mt-10 flex items-center justify-center gap-4">
-            <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${!isYearly ? 'text-black' : 'text-gray-400'}`}>Monthly</span>
-            <button 
-              onClick={() => setIsYearly(!isYearly)}
-              className="w-12 h-6 bg-gray-200 rounded-full p-1 relative transition-colors focus:outline-none"
-            >
-              <motion.div 
-                animate={{ x: isYearly ? 24 : 0 }}
-                transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                className="w-4 h-4 bg-black rounded-full shadow-sm"
-              />
-            </button>
-            <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${isYearly ? 'text-black' : 'text-gray-400'}`}>
-              Yearly <span className="ml-1 text-green-500 font-black">(-20%)</span>
-            </span>
+          {/* 🔘 TOGGLE: Monthly / Yearly */}
+          <div className="mt-10 flex flex-col items-center gap-4">
+            <div className="flex items-center justify-center gap-4">
+              <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${!isYearly ? 'text-black' : 'text-gray-400'}`}>Monthly</span>
+              <button 
+                onClick={() => setIsYearly(!isYearly)}
+                className="w-12 h-6 bg-gray-200 rounded-full p-1 relative transition-colors focus:outline-none"
+              >
+                <motion.div 
+                  animate={{ x: isYearly ? 24 : 0 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                  className="w-4 h-4 bg-black rounded-full shadow-sm"
+                />
+              </button>
+              <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${isYearly ? 'text-black' : 'text-gray-400'}`}>
+                Yearly
+              </span>
+            </div>
+            {/* 🎁 BONUS BADGE */}
+            <AnimatePresence>
+              {isYearly && (
+                <motion.span 
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  className="text-[9px] bg-green-100 text-green-600 font-black px-3 py-1 rounded-full uppercase tracking-widest"
+                >
+                  Save 20% + 2 Months Free
+                </motion.span>
+              )}
+            </AnimatePresence>
           </div>
         </header>
 

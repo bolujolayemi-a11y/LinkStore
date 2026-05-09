@@ -2,14 +2,17 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 
-/** * 🌐 SMART URL SWITCHING */
+/** * 🌐 SMART URL SWITCHING 
+ * Updated for the Full-Stack Deno deployment
+ */
 const API_BASE_URL = window.location.hostname === "localhost" 
   ? "http://localhost:8000" 
-  : "https://linkstore.bolujolayemi-a11y.deno.net"; 
+  : window.location.origin; 
 
 export default function Login() {
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
+  const [showPassword, setShowPassword] = useState(false); // 👁️ Eye state
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -20,7 +23,6 @@ export default function Login() {
     setLoading(true);
     setMessage('');
 
-    // Ensure no leading slash here since we add it in the template literal
     const endpoint = isLogin ? 'api/login' : 'api/register';
     
     try {
@@ -28,15 +30,14 @@ export default function Login() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          email: email.trim(), // Best practice to trim whitespace
+          email: email.trim(),
           password 
         }),
       });
 
-      // 1. Check if the response actually contains JSON
       const contentType = res.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
-         throw new Error("Server did not return JSON. Check Deno logs.");
+         throw new Error("Server response error. Check logs.");
       }
 
       const data = await res.json();
@@ -52,16 +53,15 @@ export default function Login() {
         } else {
           setMessage("Account created! Access your hub now. ✨");
           setIsLogin(true);
-          setPassword(''); // Clear password for security
+          setPassword('');
         }
       } else {
         setMessage(data.error || "Authentication failed.");
       }
     } catch (err: any) {
       console.error("Auth Error:", err);
-      // Helpful error messages for debugging production
       if (err.message.includes("Failed to fetch")) {
-        setMessage("Hub unreachable. Check Deno Deploy CORS or status. ❌");
+        setMessage("Hub unreachable. Check connection. ❌");
       } else {
         setMessage(err.message || "An unexpected error occurred. ❌");
       }
@@ -94,13 +94,36 @@ export default function Login() {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-4">
+            {/* EMAIL */}
             <div className="space-y-1.5 px-1">
               <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Email Address</label>
               <input type="email" required placeholder="name@store.com" value={email} className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-black outline-none transition-all text-sm font-medium" onChange={(e) => setEmail(e.target.value)} />
             </div>
+
+            {/* PASSWORD WITH EYE TOGGLE */}
             <div className="space-y-1.5 px-1">
               <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Password</label>
-              <input type="password" required placeholder="••••••••" value={password} className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-black outline-none transition-all text-sm font-medium" onChange={(e) => setPassword(e.target.value)} />
+              <div className="relative">
+                <input 
+                  type={showPassword ? "text" : "password"} 
+                  required 
+                  placeholder="••••••••" 
+                  value={password} 
+                  className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-black outline-none transition-all text-sm font-medium pr-12" 
+                  onChange={(e) => setPassword(e.target.value)} 
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 hover:text-black transition-colors"
+                >
+                  {showPassword ? (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9.88 9.88L14.12 14.12M17.36 17.36L20.5 20.5M15.42 15.42C14.59 15.8 13.62 16 12 16C8.69 16 6 13.31 6 10C6 8.38 6.2 7.41 6.58 6.58M11.24 4.55C11.49 4.52 11.74 4.5 12 4.5C16.42 4.5 20 8.08 20 12.5C20 12.76 19.98 13.01 19.45 13.76M1 1L23 23"/></svg>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
 

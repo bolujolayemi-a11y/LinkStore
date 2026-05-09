@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 
-/** * 🌐 SMART URL SWITCHING */
+/** * 🌐 SAME-ORIGIN CONFIG 
+ * Updated for the Full-Stack Deno host.
+ */
 const API_BASE_URL = window.location.hostname === "localhost" 
   ? "http://localhost:8000" 
-  : "https://linkstore.bolujolayemi-a11y.deno.net"; 
+  : window.location.origin; 
 
 export default function Checkout() {
   const navigate = useNavigate();
@@ -48,6 +50,7 @@ export default function Checkout() {
 
       if (data.success) {
         setSuccess(true);
+        // 🚀 Briefly wait so the user sees the success state
         setTimeout(() => {
           navigate('/dashboard');
         }, 2000);
@@ -56,10 +59,7 @@ export default function Checkout() {
       }
     } catch (err: any) {
       console.error("Payment Error:", err);
-      setError(window.location.hostname === "localhost" 
-        ? "Local Server Offline: Run 'deno run -A main.ts' ❌" 
-        : "Cloud Hub unreachable. Check connection. ❌"
-      );
+      setError("Payment sync failed. Check your connection. ❌");
     } finally {
       setLoading(false);
     }
@@ -95,7 +95,6 @@ export default function Checkout() {
               <header className="mb-10">
                 <h2 className="text-sm font-black uppercase tracking-widest text-gray-400">Upgrade to Pro</h2>
                 <div className="mt-2 flex items-baseline gap-1">
-                  {/* 🚀 Updated price to 3,000 to match Pricing.tsx */}
                   <span className="text-4xl font-black italic tracking-tighter text-black">₦3,000</span>
                   <span className="text-gray-400 text-xs font-bold uppercase tracking-tighter">/monthly</span>
                 </div>
@@ -150,13 +149,13 @@ export default function Checkout() {
               animate={{ opacity: 1, scale: 1 }}
               className="py-10 text-center"
             >
-              <div className="w-20 h-20 bg-black rounded-full flex items-center justify-center mx-auto mb-6">
+              <div className="w-20 h-20 bg-black rounded-full flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-black/20">
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
               </div>
-              <h2 className="text-2xl font-black italic tracking-tighter uppercase text-black">Payment Successful</h2>
-              <p className="text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] mt-3 italic">Account Activated</p>
+              <h2 className="text-2xl font-black italic tracking-tighter uppercase text-black leading-none">Payment Successful</h2>
+              <p className="text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] mt-4 italic">Account Activated</p>
             </motion.div>
           )}
         </AnimatePresence>

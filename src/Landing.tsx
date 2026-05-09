@@ -77,7 +77,6 @@ export default function Landing() {
                   transition={{ delay: i * 0.1 }}
                   onClick={() => {
                     setIsMenuOpen(false);
-                    if(link.path.startsWith('#')) return; // Handle internal anchors
                     navigate(link.path);
                   }}
                   className="text-4xl font-black italic tracking-tighter uppercase text-black hover:text-gray-300 transition-colors"
@@ -122,13 +121,13 @@ export default function Landing() {
               whileHover={{ y: -4 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => navigate('/login')}
-              className="w-full sm:w-auto px-10 md:px-12 py-5 md:py-6 bg-black text-white rounded-full font-black uppercase tracking-[0.2em] text-[10px] md:text-[11px] shadow-2xl shadow-black/20"
+              className="w-full sm:w-auto px-10 md:px-12 py-5 md:py-6 bg-black text-white rounded-full font-black uppercase tracking-[0.2em] text-[10px] md:text-[11px] shadow-2xl shadow-black/20 transition-all"
             >
               Start Your Hub Free
             </motion.button>
             <button 
               onClick={() => navigate('/pricing')}
-              className="w-full sm:w-auto px-10 md:px-12 py-5 md:py-6 bg-transparent border-2 border-gray-100 text-gray-400 rounded-full font-black uppercase tracking-[0.2em] text-[10px] md:text-[11px] hover:border-black hover:text-black"
+              className="w-full sm:w-auto px-10 md:px-12 py-5 md:py-6 bg-transparent border-2 border-gray-100 text-gray-400 rounded-full font-black uppercase tracking-[0.2em] text-[10px] md:text-[11px] hover:border-black hover:text-black transition-all"
             >
               View Plans
             </button>
@@ -136,7 +135,48 @@ export default function Landing() {
         </motion.div>
       </section>
 
-      {/* Rest of the sections (Feature Grid, Footer) remain same... */}
+      {/* Feature Grid */}
+      <section className="bg-white py-24 md:py-40 border-y border-gray-50 px-8">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-16 md:gap-20">
+          {[
+            {
+              title: "Unified Inventory",
+              desc: "Manage TikTok and IG stock in one place. No more double-selling.",
+              icon: "📦"
+            },
+            {
+              title: "Revenue Tracking",
+              desc: "Know exactly which post triggered which sale with deep attribution.",
+              icon: "📊"
+            },
+            {
+              title: "Instant Checkout",
+              desc: "A brutalist, high-speed interface that converts followers into customers.",
+              icon: "⚡"
+            }
+          ].map((feature, i) => (
+            <motion.div 
+              key={i}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: i * 0.15 }}
+              className="group"
+            >
+              <div className="text-4xl md:text-5xl mb-6 grayscale group-hover:grayscale-0 transition-all duration-500">{feature.icon}</div>
+              <h3 className="text-xl md:text-2xl font-black uppercase tracking-tighter italic mb-4 leading-none">{feature.title}</h3>
+              <p className="text-gray-400 font-medium leading-relaxed text-sm">{feature.desc}</p>
+            </motion.div>
+          ))}
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="py-24 text-center border-t border-gray-50 bg-white">
+        <p className="text-[10px] font-black uppercase tracking-[0.6em] text-gray-200">
+          LinkStore — The Merchant Standard
+        </p>
+      </footer>
     </div>
   );
 }

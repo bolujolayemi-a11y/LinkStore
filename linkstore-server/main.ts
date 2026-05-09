@@ -1,33 +1,29 @@
 // deno-lint-ignore-file
-import { Application, Router, Context } from "oak";
+import { Application, Router, Context, send } from "oak";
 import { oakCors } from "cors";
 import { SignJWT, jwtVerify } from "jose";
 
 const app = new Application();
 const router = new Router();
 
+// 🗄️ DATABASE
 const remoteUrl = Deno.env.get("HUB_DATABASE_URL");
 let kv: Deno.Kv | null = null;
 try {
   kv = await Deno.openKv(remoteUrl);
+  console.log("✅ Deno KV Connected");
 } catch (err) {
   console.error("❌ KV Error:", (err as Error).message);
 }
 
+// 🔐 AUTH
 const SECRET_STR = Deno.env.get("JWT_SECRET") || "fallback_secret";
 const SECRET = new TextEncoder().encode(SECRET_STR);
 
-// 🌍 STABLE CORS CONFIG
+// 🌍 CORS (Still useful for local development, but unnecessary in production)
 app.use(oakCors({ 
-  origin: [
-    "http://localhost:5173", 
-    "https://linkstore.bolujolayemi-a11y.deno.net",
-    "https://link-store-psi.vercel.app"
-  ],
-  methods: "GET,POST,OPTIONS",
-  allowedHeaders: "Content-Type, Authorization",
+  origin: ["http://localhost:5173", "https://linkstore.bolujolayemi-a11y.deno.net"],
   credentials: true,
-  optionsSuccessStatus: 200, // Critical for legacy browser/preflight support
 }));
 
 const authMiddleware = async (ctx: Context, next: () => Promise<unknown>) => {
@@ -48,7 +44,8 @@ const authMiddleware = async (ctx: Context, next: () => Promise<unknown>) => {
   }
 };
 
-// --- ROUTES ---
+// --- API ROUTES ---
+
 router.post("/api/register", async (ctx) => {
   try {
     const { email, password } = await ctx.request.body.json();
@@ -132,4 +129,26 @@ router.get("/api/orders", authMiddleware, async (ctx) => {
 app.use(router.routes());
 app.use(router.allowedMethods());
 
+// --- FRONTEND STATIC HOSTING ---
+
+app.use(async (ctx) => {
+  const filePath = ctx.request.url.pathname;
+  const fileWhitelist = ["/favicon.svg", "/assets", "/vite.svg"];
+  
+  try {
+    // Attempt to serve the specific file (JS/CSS/SVG)
+    await send(ctx, filePath, {
+      root: `${Deno.cwd()}/dist`,
+      index: "index.html",
+    });
+  } catch {
+    // 🚀 THE FIX: If the route isn't a file (like /dashboard), serve index.html
+    // This allows React Router to handle the URL without Vercel's 404 behavior.
+    await send(ctx, "index.html", {
+      root: `${Deno.cwd()}/dist`,
+    });
+  }
+});
+
+console.log("🟢 LinkStore Full-Stack Hub Online");
 await app.listen({ port: 8000 });

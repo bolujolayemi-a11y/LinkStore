@@ -20,9 +20,10 @@ interface StoreConfig {
   isPro?: boolean;
 }
 
+/** * 🌐 SAME-ORIGIN CONFIG */
 const API_BASE_URL = window.location.hostname === "localhost" 
   ? "http://localhost:8000" 
-  : "https://linkstore.bolujolayemi-a11y.deno.net"; 
+  : window.location.origin; 
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -40,6 +41,7 @@ export default function Dashboard() {
 
       try {
         setLoading(true);
+        // Fetch Store Config
         const response = await fetch(`${API_BASE_URL}/api/get-store`, {
           headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }
         });
@@ -48,11 +50,12 @@ export default function Dashboard() {
         if (isMounted) {
           if (data.success) {
             setStore(data.store);
+            // Fetch Orders
             const orderRes = await fetch(`${API_BASE_URL}/api/orders`, {
               headers: { "Authorization": `Bearer ${token}` }
             });
             const orderData = await orderRes.json();
-            if (orderData.success) setOrders(orderData.orders);
+            if (orderData.success) setOrders(orderData.orders || []);
           } else {
             navigate('/create');
           }
@@ -117,7 +120,7 @@ export default function Dashboard() {
               <button onClick={() => setView('orders')} className={`px-4 md:px-6 py-2 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all ${view === 'orders' ? 'bg-white shadow-sm text-black' : 'text-gray-400'}`}>Orders</button>
               <button onClick={() => setView('settings')} className={`px-4 md:px-6 py-2 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all ${view === 'settings' ? 'bg-white shadow-sm text-black' : 'text-gray-400'}`}>Settings</button>
             </nav>
-            <button onClick={() => { localStorage.removeItem('token'); navigate('/'); }} className="p-2 text-gray-300 hover:text-red-500 transition-colors">
+            <button onClick={() => { localStorage.removeItem('token'); navigate('/login'); }} className="p-2 text-gray-300 hover:text-red-500 transition-colors">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
             </button>
           </div>
@@ -189,7 +192,7 @@ export default function Dashboard() {
                   </div>
                   <div>
                     <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1">Username</p>
-                    <p className="text-base md:text-lg font-bold text-black italic tracking-tighter">{store?.username || 'Merchant'}</p>
+                    <p className="text-base md:text-lg font-bold text-black italic tracking-tighter">@{store?.username || 'Merchant'}</p>
                   </div>
                   <button onClick={() => navigate('/create')} className="w-full py-4 bg-black text-white rounded-full text-[10px] font-black uppercase tracking-widest shadow-xl shadow-black/10 active:scale-95 transition-all">
                     Update Hub Config
@@ -209,6 +212,9 @@ export default function Dashboard() {
                       <a href={link.url} target="_blank" rel="noreferrer" className="text-[9px] font-black text-black uppercase underline underline-offset-4 opacity-30 group-hover:opacity-100 transition-all">Visit</a>
                     </div>
                   ))}
+                  {store?.links.length === 0 && (
+                    <p className="text-[9px] font-black uppercase text-gray-300 italic py-4">No sources linked yet.</p>
+                  )}
                 </div>
               </div>
 
