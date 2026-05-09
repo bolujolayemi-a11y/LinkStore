@@ -6,42 +6,30 @@ import { SignJWT, jwtVerify } from "jose";
 const app = new Application();
 const router = new Router();
 
-/**
- * 🔗 DATABASE CONNECTION
- */
 const remoteUrl = Deno.env.get("HUB_DATABASE_URL");
 let kv: Deno.Kv | null = null;
-
 try {
   kv = await Deno.openKv(remoteUrl);
-  console.log("✅ Deno KV Connected Successfully");
 } catch (err) {
-  const error = err as Error;
-  console.error("❌ KV CONNECTION ERROR:", error.message);
+  console.error("❌ KV Error:", (err as Error).message);
 }
 
-// 🔐 SECURITY
-const SECRET_STR = Deno.env.get("JWT_SECRET") || "fallback_secret_for_local_only";
+const SECRET_STR = Deno.env.get("JWT_SECRET") || "fallback_secret";
 const SECRET = new TextEncoder().encode(SECRET_STR);
 
-/**
- * 🌍 CORS CONFIGURATION
- * Updated with your specific Vercel production URL.
- */
+// 🌍 STABLE CORS CONFIG
 app.use(oakCors({ 
   origin: [
     "http://localhost:5173", 
     "https://linkstore.bolujolayemi-a11y.deno.net",
-    "https://link-store-psi.vercel.app", 
-    /^https:\/\/link-store-.*\.vercel\.app$/ 
+    "https://link-store-psi.vercel.app"
   ],
-  credentials: true,
   methods: "GET,POST,OPTIONS",
   allowedHeaders: "Content-Type, Authorization",
-  optionsSuccessStatus: 200, 
+  credentials: true,
+  optionsSuccessStatus: 200, // Critical for legacy browser/preflight support
 }));
 
-// --- AUTH MIDDLEWARE ---
 const authMiddleware = async (ctx: Context, next: () => Promise<unknown>) => {
   const authHeader = ctx.request.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
@@ -60,26 +48,23 @@ const authMiddleware = async (ctx: Context, next: () => Promise<unknown>) => {
   }
 };
 
-// --- AUTH ROUTES ---
-
+// --- ROUTES ---
 router.post("/api/register", async (ctx) => {
   try {
-    const body = await ctx.request.body.json();
-    const { email, password } = body;
-    if (!kv) throw new Error("Database not connected");
+    const { email, password } = await ctx.request.body.json();
+    if (!kv) throw new Error("DB Offline");
     await kv.set(["users", email], { password, createdAt: new Date().toISOString() });
     ctx.response.body = { success: true };
   } catch (err) {
-    const error = err as Error;
     ctx.response.status = 500;
-    ctx.response.body = { error: error.message };
+    ctx.response.body = { error: (err as Error).message };
   }
 });
 
 router.post("/api/login", async (ctx) => {
   try {
     const { email, password } = await ctx.request.body.json();
-    if (!kv) throw new Error("Database not connected");
+    if (!kv) throw new Error("DB Offline");
     const user = await kv.get<{password: string}>(["users", email]);
 
     if (user.value && user.value.password === password) {
@@ -94,39 +79,8 @@ router.post("/api/login", async (ctx) => {
       ctx.response.body = { error: "Invalid credentials" };
     }
   } catch (err) {
-    const error = err as Error;
     ctx.response.status = 400;
-    ctx.response.body = { error: error.message };
-  }
-});
-
-// --- HUB DATA ROUTES ---
-
-router.post("/api/save-store", authMiddleware, async (ctx) => {
-  try {
-    const userEmail = ctx.state.user; 
-    const body = await ctx.request.body.json();
-    if (!kv) throw new Error("DB Offline");
-
-    const sub = await kv.get<{plan: string, status: string}>(["subscriptions", userEmail]);
-    const isPro = sub.value?.plan === 'Pro' && sub.value?.status === 'Active';
-
-    // 🛡️ 3-Link Limit Enforcement
-    if (!isPro && body.links.length > 3) {
-      ctx.response.status = 403;
-      ctx.response.body = { success: false, error: "Limit reached. Upgrade to Pro." };
-      return;
-    }
-    
-    const storeData = { ...body, isPro, updatedAt: new Date().toISOString() };
-    await kv.set(["user_stores", userEmail], storeData);
-    await kv.set(["stores", body.username], storeData);
-    
-    ctx.response.body = { success: true };
-  } catch (err) {
-    const error = err as Error;
-    ctx.response.status = 500;
-    ctx.response.body = { error: error.message };
+    ctx.response.body = { error: (err as Error).message };
   }
 });
 
@@ -134,40 +88,30 @@ router.get("/api/get-store", authMiddleware, async (ctx) => {
   try {
     const userEmail = ctx.state.user;
     if (!kv) throw new Error("DB Offline");
-    
     const [storeRes, subRes] = await Promise.all([
-      kv.get<Record<string, any>>(["user_stores", userEmail]),
-      kv.get<{plan: string}>(["subscriptions", userEmail])
+      kv.get<any>(["user_stores", userEmail]),
+      kv.get<any>(["subscriptions", userEmail])
     ]);
-    
-    // Clean fallback if no store exists yet
-    const storeData = storeRes.value || { username: "", bio: "", links: [] };
-    const isPro = subRes.value?.plan === 'Pro';
-
     ctx.response.body = { 
       success: true, 
-      store: { ...storeData, isPro } 
+      store: { ...(storeRes.value || { links: [] }), isPro: subRes.value?.plan === 'Pro' } 
     };
   } catch (err) {
-    const error = err as Error;
     ctx.response.status = 500;
-    ctx.response.body = { error: error.message };
+    ctx.response.body = { error: (err as Error).message };
   }
 });
-
-// --- LOGISTICS & BILLING ---
 
 router.post("/api/update-subscription", authMiddleware, async (ctx) => {
   try {
     const userEmail = ctx.state.user;
-    const { plan, status } = await ctx.request.body.json();
+    const body = await ctx.request.body.json();
     if (!kv) throw new Error("DB Offline");
-    await kv.set(["subscriptions", userEmail], { plan, status, updatedAt: new Date().toISOString() });
+    await kv.set(["subscriptions", userEmail], { ...body, updatedAt: new Date().toISOString() });
     ctx.response.body = { success: true };
   } catch (err) {
-    const error = err as Error;
     ctx.response.status = 500;
-    ctx.response.body = { error: error.message };
+    ctx.response.body = { error: (err as Error).message };
   }
 });
 
@@ -175,23 +119,17 @@ router.get("/api/orders", authMiddleware, async (ctx) => {
   try {
     const userEmail = ctx.state.user;
     if (!kv) throw new Error("DB Offline");
-    
-    // List all orders for this user
     const iter = kv.list({ prefix: ["orders", userEmail] });
     const orders = [];
     for await (const res of iter) orders.push(res.value);
-
     ctx.response.body = { success: true, orders };
   } catch (err) {
-    const error = err as Error;
     ctx.response.status = 500;
-    ctx.response.body = { error: error.message };
+    ctx.response.body = { error: (err as Error).message };
   }
 });
 
 app.use(router.routes());
 app.use(router.allowedMethods());
 
-const port = 8000;
-console.log(`🟢 LinkStore Hub Online | http://localhost:${port}`);
-await app.listen({ port });
+await app.listen({ port: 8000 });
