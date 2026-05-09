@@ -6,26 +6,34 @@ import { SignJWT, jwtVerify } from "jose";
 const app = new Application();
 const router = new Router();
 
+/**
+ * 🔗 DATABASE CONNECTION
+ */
 const remoteUrl = Deno.env.get("HUB_DATABASE_URL");
 let kv: Deno.Kv | null = null;
 
 try {
   kv = await Deno.openKv(remoteUrl);
-  console.log("✅ Deno KV Connected");
+  console.log("✅ Deno KV Connected Successfully");
 } catch (err) {
   const error = err as Error;
   console.error("❌ KV CONNECTION ERROR:", error.message);
 }
 
+// 🔐 SECURITY
 const SECRET_STR = Deno.env.get("JWT_SECRET") || "fallback_secret_for_local_only";
 const SECRET = new TextEncoder().encode(SECRET_STR);
 
+/**
+ * 🌍 CORS CONFIGURATION
+ * Updated with your specific Vercel production URL.
+ */
 app.use(oakCors({ 
   origin: [
     "http://localhost:5173", 
     "https://linkstore.bolujolayemi-a11y.deno.net",
-    "https://link-store-psi.vercel.app", // Your main production link
-    /^https:\/\/link-store-.*\.vercel\.app$/ // Matches any Vercel preview branch
+    "https://link-store-psi.vercel.app", 
+    /^https:\/\/link-store-.*\.vercel\.app$/ 
   ],
   credentials: true,
   methods: "GET,POST,OPTIONS",
@@ -33,6 +41,7 @@ app.use(oakCors({
   optionsSuccessStatus: 200, 
 }));
 
+// --- AUTH MIDDLEWARE ---
 const authMiddleware = async (ctx: Context, next: () => Promise<unknown>) => {
   const authHeader = ctx.request.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
@@ -52,6 +61,7 @@ const authMiddleware = async (ctx: Context, next: () => Promise<unknown>) => {
 };
 
 // --- AUTH ROUTES ---
+
 router.post("/api/register", async (ctx) => {
   try {
     const body = await ctx.request.body.json();
@@ -91,6 +101,7 @@ router.post("/api/login", async (ctx) => {
 });
 
 // --- HUB DATA ROUTES ---
+
 router.post("/api/save-store", authMiddleware, async (ctx) => {
   try {
     const userEmail = ctx.state.user; 
@@ -100,6 +111,7 @@ router.post("/api/save-store", authMiddleware, async (ctx) => {
     const sub = await kv.get<{plan: string, status: string}>(["subscriptions", userEmail]);
     const isPro = sub.value?.plan === 'Pro' && sub.value?.status === 'Active';
 
+    // 🛡️ 3-Link Limit Enforcement
     if (!isPro && body.links.length > 3) {
       ctx.response.status = 403;
       ctx.response.body = { success: false, error: "Limit reached. Upgrade to Pro." };
@@ -123,13 +135,12 @@ router.get("/api/get-store", authMiddleware, async (ctx) => {
     const userEmail = ctx.state.user;
     if (!kv) throw new Error("DB Offline");
     
-    // Safely get store and subscription
     const [storeRes, subRes] = await Promise.all([
-      kv.get<Record<string, unknown>>(["user_stores", userEmail]),
+      kv.get<Record<string, any>>(["user_stores", userEmail]),
       kv.get<{plan: string}>(["subscriptions", userEmail])
     ]);
     
-    // If store doesn't exist yet, return a clean empty state instead of crashing
+    // Clean fallback if no store exists yet
     const storeData = storeRes.value || { username: "", bio: "", links: [] };
     const isPro = subRes.value?.plan === 'Pro';
 
@@ -143,6 +154,8 @@ router.get("/api/get-store", authMiddleware, async (ctx) => {
     ctx.response.body = { error: error.message };
   }
 });
+
+// --- LOGISTICS & BILLING ---
 
 router.post("/api/update-subscription", authMiddleware, async (ctx) => {
   try {
@@ -158,8 +171,27 @@ router.post("/api/update-subscription", authMiddleware, async (ctx) => {
   }
 });
 
+router.get("/api/orders", authMiddleware, async (ctx) => {
+  try {
+    const userEmail = ctx.state.user;
+    if (!kv) throw new Error("DB Offline");
+    
+    // List all orders for this user
+    const iter = kv.list({ prefix: ["orders", userEmail] });
+    const orders = [];
+    for await (const res of iter) orders.push(res.value);
+
+    ctx.response.body = { success: true, orders };
+  } catch (err) {
+    const error = err as Error;
+    ctx.response.status = 500;
+    ctx.response.body = { error: error.message };
+  }
+});
+
 app.use(router.routes());
 app.use(router.allowedMethods());
 
-console.log(`🟢 LinkStore Hub Online`);
-await app.listen({ port: 8000 });
+const port = 8000;
+console.log(`🟢 LinkStore Hub Online | http://localhost:${port}`);
+await app.listen({ port });
